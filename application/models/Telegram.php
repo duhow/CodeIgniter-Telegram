@@ -329,8 +329,9 @@ class Telegram extends CI_Model{
 			$this->caption = $this->data['message']['caption'];
 		}
 		if(isset($this->data['message']['reply_to_message'])){
-			$this->has_reply = TRUE;
-			$this->reply_user = (object) $this->data['message']['reply_to_message']['from'];
+            $this->has_reply = TRUE;
+            $this->reply_is_forward = (isset($this->data['message']['reply_to_message']['forward_from']));
+            $this->reply_user = (object) $this->data['message']['reply_to_message']['from'];
             $this->reply = (object) $this->data['message']['reply_to_message'];
 		}
 		if(isset($this->data['message']['new_chat_participant'])){
@@ -349,6 +350,7 @@ class Telegram extends CI_Model{
 	public $new_user = NULL;
 	public $reply_user = NULL;
 	public $has_reply = FALSE;
+    public $reply_is_forward = FALSE;
 	public $caption = NULL;
 	public $send; // Class
 
@@ -368,6 +370,10 @@ class Telegram extends CI_Model{
 		return FALSE;
 	}
 
+    function clean($text, $pattern = NULL){
+        // TODO
+    }
+
     function text($clean = FALSE){
 		$text = @$this->data['message']['text'];
 		if($clean === TRUE){ $text = preg_replace("/[^a-zA-Z0-9 áéíóúÁÉÍÓÚ]+/", "", $text); }
@@ -378,6 +384,7 @@ class Telegram extends CI_Model{
 		$text = explode(" ", $this->text($clean));
 		return array_pop($text);
 	}
+    
     function words($position = NULL, $amount = 1){ // Contar + recibir argumentos
 		$clean = FALSE;
 		if($position === NULL){
@@ -405,7 +412,7 @@ class Telegram extends CI_Model{
 		return FALSE;
 	}
 
-	function is_bot(){ return (isset($this->user->username) && substr(strtolower($this->user->username), -3) == "bot") }
+	function is_bot($user = NULL){ if($user === NULL){ $user = $this->user->username; } return (!empty($user) && substr(strtolower($user), -3) == "bot"); }
 
     function dump($json = FALSE){ return($json ? json_encode($this->data) : $this->data); }
 
@@ -417,16 +424,39 @@ class Telegram extends CI_Model{
         }
         return ($full == TRUE ? $admins : $ret);
     }
-    // function chat($data){}
-    // function user($data){}
-    // function new_user($data){}
-    // function reply_user($data){}
-    // function has_reply(){}
 
     function document(){}
-    function photo(){}
-    function location(){}
-    function contact($same = FALSE){}
+    function photo($retall = FALSE, $id = -1){
+        $photos = $this->data['message']['photo'];
+        if(empty($photos)){ return FALSE; }
+        $photo = NULL;
+        if($id == -1 or $id > count($photos) - 1){ $photo = array_pop($photos); }
+        else{ $photo = $photos[$id]; }
+
+        if($retall == FALSE){ return $photo['file_id']; }
+        elseif($retall == TRUE){ return (object) $photo; }
+    }
+
+    function location($object = TRUE){
+        $loc = $this->data['message']['location'];
+        if(empty($loc)){ return FALSE; }
+        if($object == TRUE){ return (object) $loc; }
+        return $loc;
+    }
+
+    function contact($same = FALSE, $object = TRUE){
+        $contact = $this->data['message']['contact'];
+        if(empty($contact)){ return FALSE; }
+        if(
+            $same == FALSE or
+            ($same == TRUE && $this->user->id == $contact['user_id'])
+        ){
+            if($object == TRUE){ return (object) $contact; }
+            return $contact;
+        }elseif($same == TRUE){
+            return FALSE;
+        }
+    }
 
 	function emoji($text){
         $emoji = [
@@ -436,13 +466,26 @@ class Telegram extends CI_Model{
 			'heart-green' => "\ud83d\udc9a",
             'heart-yellow' => "\ud83d\udc9b",
 			'laugh' => "\ud83d\ude02",
+            'tongue' => "\ud83d\ude1b",
             'smiley' => "\ud83d\ude00",
+            'happy' => "\ud83d\ude19",
+            'die' => "\ud83d\ude35",
+            'cloud' => "\u2601\ufe0f",
+            'gun' => "\ud83d\udd2b",
 			'green-check' => "\u2705",
 
 			'forbid' => "\u26d4\ufe0f",
 			'times' => "\u274c",
             'warning' => "\u26a0\ufe0f",
 			'banned' => "\ud83d\udeab",
+            'star' => "\u2b50\ufe0f",
+            'star-shine' => "\ud83c\udf1f",
+            'mouse' => "\ud83d\udc2d",
+            'multiuser' => "\ud83d\udc65",
+            'robot' => "\ud83e\udd16",
+            'fire' => "\ud83d\udd25",
+            'collision' => "\ud83d\udca5",
+            'joker' => "\ud83c\udccf",
 			'exclamation-red' => "\u2757\ufe0f",
 			'question-red' => "\u2753",
 			'exclamation-grey' => "\u2755",
@@ -466,7 +509,6 @@ class Telegram extends CI_Model{
 			'multiply' => "\u2716\ufe0f",
 			'search-left' => "\ud83d\udd0d",
 			'search-right' => "\ud83d\udd0e",
-
 		];
 
 		$search = [
@@ -475,11 +517,26 @@ class Telegram extends CI_Model{
 			'heart-blue' => [':heart-blue:'],
 			'heart-green' => [':heart-green:'],
             'heart-yellow' => [':heart-yellow:'],
-            'smiley' => [":>", "]:D"],
+            'smiley' => [":>", "]:D", ":smiley:"],
+            'happy' => ["^^", ":happy:"],
 			'laugh' => [":'D", ':lol:'],
+
+            'tongue' => ["=P", ":tongue:"],
+            'die' => [">X", ":die:"],
+            'cloud' => [":cloud:"],
+            'gun' => [":gun:"],
+
 			'forbid' => [':forbid:'],
 			'times' => [':times:'],
 			'banned' => [':banned:'],
+            'star' => [':star:'],
+            'star-shine' => [':star-shine:'],
+            'mouse' => [':mouse:'],
+            'robot' => [':robot:'],
+            'multiuser' => [':multiuser:'],
+            'fire' => [':fire:'],
+            'collision' => [':collision:'],
+            'joker' => [':joker:'],
             'green-check' => [':ok:', ':green-check:'],
             'warning' => [':warning:'],
 			'exclamation-red' => [':exclamation-red:'],

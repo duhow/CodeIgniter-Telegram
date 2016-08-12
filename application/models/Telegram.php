@@ -384,7 +384,7 @@ class Telegram extends CI_Model{
 		$text = explode(" ", $this->text($clean));
 		return array_pop($text);
 	}
-    
+
     function words($position = NULL, $amount = 1){ // Contar + recibir argumentos
 		$clean = FALSE;
 		if($position === NULL){

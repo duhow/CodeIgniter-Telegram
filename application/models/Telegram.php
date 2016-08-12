@@ -422,8 +422,9 @@ class Telegram extends CI_Model{
 	}
 
 	function last_word($clean = FALSE){
-		$text = explode(" ", $this->text($clean));
-		return array_pop($text);
+		$text = explode(" ", $this->text());
+		if($clean === TRUE){ $clean = 'alphanumeric-accent'; }
+		return $this->clean($clean, array_pop($text));
 	}
 
 	function words($position = NULL, $amount = 1){ // Contar + recibir argumentos
@@ -449,9 +450,9 @@ class Telegram extends CI_Model{
 			'number-calc' => '/^([+-]?)\d+(([\.,]?)\d+?)/',
 			'alphanumeric' => '/[^a-zA-Z0-9]+/',
 			'alphanumeric-accent' => '/[^a-zA-Z0-9áéíóúÁÉÍÓÚ]+/',
-			'alphanumeric-symbols-basic' => '/[^a-zA-Z0-9_-.,]+/',
-			'alphanumeric-full' => '/[^a-zA-Z0-9áéíóúÁÉÍÓÚ_-.,]+/'
-			'alphanumeric-full-spaces' => '/[^a-zA-Z0-9áéíóúÁÉÍÓÚ_., ]+/'
+			'alphanumeric-symbols-basic' => '/[^a-zA-Z0-9_-.]+/',
+			'alphanumeric-full' => '/[^a-zA-Z0-9áéíóúÁÉÍÓÚ_-.]+/',
+			'alphanumeric-full-spaces' => '/[^a-zA-Z0-9áéíóúÁÉÍÓÚ_-. ]+/',
 		];
 		if(empty($text)){ $text = $this->text(); }
 		if($pattern == FALSE){ return $text; }

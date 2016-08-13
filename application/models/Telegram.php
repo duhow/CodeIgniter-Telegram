@@ -418,7 +418,9 @@ class Telegram extends CI_Model{
 			else{ $regex = "(" .$input .')([\s!.,"]?)\s(' .$next_word .')([\s!?.,"])|(' .$input .')([\s!.,"]?)\s(' .$next_word .')([!?.,"]?)$'; }
 		}
 
-		return preg_match("/" .$regex ."/", strtolower($this->text()));
+		$text = strtolower($this->text());
+		$text = str_replace(["á", "é", "í", "ó", "ú"], ["a", "e", "i", "o", "u"], $text); // HACK
+		return preg_match("/" .$regex ."/", $text);
 	}
 
 	function last_word($clean = FALSE){

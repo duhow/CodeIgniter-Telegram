@@ -410,7 +410,7 @@ class Telegram extends CI_Model{
 		}
 
 		if($position === TRUE){
-			if($next_word === NULL){ $regex = "^(" .$input .')([\s!.,"])'; }
+			if($next_word === NULL){ $regex = "^(" .$input .')([\s!.,"]?)'; }
 			else{ $regex = "^(" .$input .')([\s!.,"]?)\s(' .$next_word .')([\s!?.,"])'; }
 		}elseif($position === FALSE){
 			if($next_word === NULL){ $regex = "(" .$input .')([!?,."]?)$'; }

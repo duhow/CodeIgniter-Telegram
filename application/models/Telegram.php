@@ -2,6 +2,10 @@
 
 define('TG_API_URL', 'https://api.telegram.org/bot');
 
+class __Module_Telegram_Buttons extends CI_Model{
+	private $buttons;
+}
+
 class __Module_Telegram_Sender extends CI_Model{
 	private $content = array();
 	private $method = NULL;
@@ -79,6 +83,12 @@ class __Module_Telegram_Sender extends CI_Model{
 		return $this;
 	}
 
+	function inline_keyboard($buttons = NULL){
+		if(empty($buttons)){
+
+		}
+	}
+
 	function caption($text){
 		$this->content['caption'] = $text;
 		return $this;
@@ -150,6 +160,7 @@ class __Module_Telegram_Sender extends CI_Model{
 	}
 
 	function get_member_info($user = NULL, $chat = NULL, $keep = FALSE){
+		// stats -> member, left, kicked, administrator, creator
 		return $this->_parse_generic_chatFunctions("getChatMember", $keep, $chat, $user);
 	}
 

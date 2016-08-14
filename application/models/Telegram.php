@@ -411,10 +411,10 @@ class Telegram extends CI_Model{
 
 		if($position === TRUE){
 			if($next_word === NULL){ $regex = "^(" .$input .')([\s!.,"]?)'; }
-			else{ $regex = "^(" .$input .')([\s!.,"]?)\s(' .$next_word .')([\s!?.,"])'; }
+			else{ $regex = "^(" .$input .')([\s!.,"]?)\s(' .$next_word .')([\s!?.,"]?)'; }
 		}elseif($position === FALSE){
 			if($next_word === NULL){ $regex = "(" .$input .')([!?,."]?)$'; }
-			else{ $regex = "(" .$input .')([\s!.,"]?)\s(' .$next_word .')([?!.,"])$'; }
+			else{ $regex = "(" .$input .')([\s!.,"]?)\s(' .$next_word .')([?!.,"]?)$'; }
 		}else{
 			if($next_word === NULL){ $regex = "(" .$input .')([\s!?.,"])|(' .$input .')$'; }
 			else{ $regex = "(" .$input .')([\s!.,"]?)\s(' .$next_word .')([\s!?.,"])|(' .$input .')([\s!.,"]?)\s(' .$next_word .')([!?.,"]?)$'; }

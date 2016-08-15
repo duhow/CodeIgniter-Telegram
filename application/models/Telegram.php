@@ -469,9 +469,9 @@ class Telegram extends CI_Model{
 			'number-calc' => '/^([+-]?)\d+(([\.,]?)\d+?)/',
 			'alphanumeric' => '/[^a-zA-Z0-9]+/',
 			'alphanumeric-accent' => '/[^a-zA-Z0-9áéíóúÁÉÍÓÚ]+/',
-			'alphanumeric-symbols-basic' => '/[^a-zA-Z0-9_-.]+/',
-			'alphanumeric-full' => '/[^a-zA-Z0-9áéíóúÁÉÍÓÚ_-.]+/',
-			'alphanumeric-full-spaces' => '/[^a-zA-Z0-9áéíóúÁÉÍÓÚ_-. ]+/',
+			'alphanumeric-symbols-basic' => '/[^a-zA-Z0-9\._\-]+/',
+			'alphanumeric-full' => '/[^a-zA-Z0-9áéíóúÁÉÍÓÚ\._\-]+/',
+			'alphanumeric-full-spaces' => '/[^a-zA-Z0-9áéíóúÁÉÍÓÚ\.\s_\-]+/',
 		];
 		if(empty($text)){ $text = $this->text(); }
 		if($pattern == FALSE){ return $text; }

@@ -2,13 +2,80 @@
 
 define('TG_API_URL', 'https://api.telegram.org/bot');
 
-class __Module_Telegram_Buttons extends CI_Model{
+class __Module_Telegram_Keyboard extends CI_Model{
+	private $rows;
+	private $config;
+
+	function __construct(){
+		parent::__construct();
+		$this->selective(FALSE);
+	}
+
+	function row(){
+		return new __Module_Telegram_Keyboard_Row();
+	}
+
+	function push($data){
+		if(!is_array($data)){ return FALSE; }
+		$this->rows[] = $data;
+		return $this;
+	}
+
+	function selective($val = TRUE){
+		$this->config['selective'] = $val;
+		return $this;
+	}
+
+	function show($one_time = FALSE, $resize = FALSE){
+		$this->telegram->send->_push('reply_markup', [
+			'keyboard' => $this->rows,
+			'resize_keyboard' => $resize,
+			'one_time_keyboard' => $one_time,
+			'selective' => $this->config['selective']
+		]);
+		return $this->telegram->send;
+	}
+
+	function hide(){
+		$this->telegram->send->_push('reply_markup', [
+			'hide_keyboard' => TRUE,
+			'selective' => $this->config['selective']
+		]);
+		return $this->telegram->send;
+	}
+
+	function _reset(){
+		$this->rows = array();
+		return $this;
+	}
+}
+
+class __Module_Telegram_Keyboard_Row extends CI_Model{
 	private $buttons;
+	function button($text, $request = NULL){
+		$data = array();
+		$data['text'] = $text;
+		if($request === TRUE or $request == "contact"){ $data['request_contact'] = TRUE; }
+		elseif($request === FALSE or $request == "location"){ $data['request_location'] = TRUE; }
+		$this->buttons[] = $data;
+		return $this;
+	}
+	function end_row(){
+		var_dump($this->buttons);
+		$this->telegram->send->keyboard()->push($this->buttons);
+		return $this->telegram->send->keyboard();
+	}
 }
 
 class __Module_Telegram_Sender extends CI_Model{
 	private $content = array();
 	private $method = NULL;
+	private $_keyboard;
+
+	function __construct(){
+		parent::__construct();
+		$this->_keyboard = new __Module_Telegram_Keyboard();
+	}
 
 	function chat($id = NULL){
 		$this->content['chat_id'] = $id;
@@ -82,6 +149,8 @@ class __Module_Telegram_Sender extends CI_Model{
 
 		return $this;
 	}
+
+	function keyboard(){ return $this->_keyboard; }
 
 	function inline_keyboard($buttons = NULL){
 		if(empty($buttons)){
@@ -181,7 +250,10 @@ class __Module_Telegram_Sender extends CI_Model{
 		return $this->send();
 	}
 
-	// function action($type = NULL){}
+	function _push($key, $val){
+		$this->content[$key] = $val;
+		return $this;
+	}
 
 	function _reset(){
 		$this->method = NULL;
@@ -446,19 +518,19 @@ class Telegram extends CI_Model{
 		return $this->clean($clean, array_pop($text));
 	}
 
-	function words($position = NULL, $amount = 1){ // Contar + recibir argumentos
-		$clean = FALSE;
+	function words($position = NULL, $amount = 1, $filter = FALSE){ // Contar + recibir argumentos
 		if($position === NULL){
 			return count(explode(" ", $this->text()));
 		}elseif(is_numeric($position)){
-			if($amount === TRUE){ $clean = TRUE; $amount = 1; }
+			if($amount === TRUE){ $filter = 'alphanumeric'; $amount = 1; }
+			elseif(is_string($amount)){ $filter = $amount; $amount = 1; }
 			$t = explode(" ", $this->text());
 			$a = $position + $amount;
 			$str = '';
 			for($i = $position; $i < $a; $i++){
 				$str .= $t[$i] .' ';
 			}
-			if($clean){ $str = preg_replace("/[^a-zA-Z0-9]+/", "", $str); }
+			if($filter !== FALSE){ $str = $this->clean($filter, $str); }
 			return trim($str);
 		}
 	}
@@ -540,7 +612,7 @@ class Telegram extends CI_Model{
 		}
 	}
 
-	function emoji($text){
+	function emoji($text, $reverse = FALSE){
 		$emoji = [
 			'kiss' => "\ud83d\ude18",
 			'heart' => "\u2764\ufe0f",
@@ -597,17 +669,17 @@ class Telegram extends CI_Model{
 		];
 
 		$search = [
-			'kiss' => [':*', ':kiss:'],
-			'heart' => ['<3', ':heart:', ':heart-red:', ':love:'],
+			'kiss' => [':kiss:', ':*'],
+			'heart' => [':heart-red:', '<3', ':heart:', ':love:'],
 			'heart-blue' => [':heart-blue:'],
 			'heart-green' => [':heart-green:'],
 			'heart-yellow' => [':heart-yellow:'],
-			'smiley' => [":>", "]:D", ":smiley:"],
-			'happy' => ["^^", ":happy:"],
-			'laugh' => [":'D", ':lol:'],
+			'smiley' => [":smiley:", ":>", "]:D"],
+			'happy' => [":happy:", "^^"],
+			'laugh' => [':lol:', ":'D"],
 
-			'tongue' => ["=P", ":tongue:"],
-			'die' => [">X", ":die:"],
+			'tongue' => [":tongue:", "=P"],
+			'die' => [":die:", ">X"],
 			'cloud' => [":cloud:"],
 			'gun' => [":gun:"],
 
@@ -650,13 +722,16 @@ class Telegram extends CI_Model{
 			'search-right' => [':search-right:'],
 		];
 
-		foreach($search as $n => $k){
-			$text = str_replace($k, $emoji[$n], $text);
+		if(!$reverse){
+			foreach($search as $n => $k){
+				$text = str_replace($k, $emoji[$n], $text);
+			}
+			return json_decode('"' . $text .'"', TRUE);
 		}
-
-		// return json_encode($text); // '"' . $text .'"'
-		return json_decode('"' . $text .'"', TRUE);
-		// return $text;
+		foreach($emoji as $n => $u){
+			$text = str_replace($u, $search[$n][0], $text);
+		}
+		return substr(json_encode($text), 1, -1); // No comas
 	}
 }
 

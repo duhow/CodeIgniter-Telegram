@@ -11,9 +11,7 @@ class __Module_Telegram_Keyboard extends CI_Model{
 		$this->selective(FALSE);
 	}
 
-	function row(){
-		return new __Module_Telegram_Keyboard_Row();
-	}
+	function row(){ return new __Module_Telegram_Keyboard_Row(); }
 
 	function push($data){
 		if(!is_array($data)){ return FALSE; }
@@ -33,14 +31,17 @@ class __Module_Telegram_Keyboard extends CI_Model{
 			'one_time_keyboard' => $one_time,
 			'selective' => $this->config['selective']
 		]);
+		$this->_reset();
 		return $this->telegram->send;
 	}
 
-	function hide(){
+	function hide($sel = FALSE){
+		if($sel === TRUE){ $this->selective(TRUE); }
 		$this->telegram->send->_push('reply_markup', [
 			'hide_keyboard' => TRUE,
 			'selective' => $this->config['selective']
 		]);
+		$this->_reset();
 		return $this->telegram->send;
 	}
 
@@ -151,11 +152,8 @@ class __Module_Telegram_Sender extends CI_Model{
 	}
 
 	function keyboard(){ return $this->_keyboard; }
-
-	function inline_keyboard($buttons = NULL){
-		if(empty($buttons)){
-
-		}
+	function inline_keyboard(){
+		// TODO
 	}
 
 	function caption($text){
@@ -170,17 +168,16 @@ class __Module_Telegram_Sender extends CI_Model{
 
 	function notification($value = TRUE){
 		if($value === FALSE){ $this->content['disable_notification'] = TRUE; }
-		else{  } // UNSET ?
+		else{ if(isset($this->content['disable_notification'])){ unset($this->content['disable_notification']); } }
 		return $this;
 	}
 
 	function reply_to($message_id = NULL){
-		if($message_id === TRUE){ $message_id = $this->telegram->message; }
+		if($message_id === TRUE or ($message_id === FALSE && !$this->telegram->has_reply)){ $message_id = $this->telegram->message; }
+		elseif($message_id === FALSE && $this->telegram->has_reply){ $message_id = $this->telegram->reply->message_id; }
 		$this->content['reply_to_message_id'] = $message_id;
 		return $this;
 	}
-
-	function markup(){} // TODO
 
 	function forward_to($chat_id_to){
 		if(empty($this->content['chat_id']) or empty($this->content['message_id'])){ return FALSE; }
@@ -197,10 +194,6 @@ class __Module_Telegram_Sender extends CI_Model{
 		$this->content['action'] = $type;
 		$this->method = "sendChatAction";
 		return $this;
-	}
-
-	function download($file){
-
 	}
 
 	function kick($user = NULL, $chat = NULL, $keep = FALSE){
@@ -610,6 +603,10 @@ class Telegram extends CI_Model{
 		}elseif($same == TRUE){
 			return FALSE;
 		}
+	}
+
+	function download($file){
+		// TODO
 	}
 
 	function emoji($text, $reverse = FALSE){

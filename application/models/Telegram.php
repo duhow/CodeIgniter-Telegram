@@ -12,6 +12,7 @@ class __Module_Telegram_Keyboard extends CI_Model{
 	}
 
 	function row(){ return new __Module_Telegram_Keyboard_Row(); }
+	function row_button($text, $request = NULL){ return $this->row()->button($text, $request)->end_row(); }
 
 	function push($data){
 		if(!is_array($data)){ return FALSE; }
@@ -98,6 +99,15 @@ class __Module_Telegram_Sender extends CI_Model{
 	function file($type, $file, $caption = NULL, $keep = FALSE){
 		if(!in_array($type, ["photo", "audio", "voice", "document", "sticker", "video"])){ return FALSE; }
 
+		$url = FALSE;
+		if(filter_var($file, FILTER_VALIDATE_URL) !== FALSE){
+			// ES URL, descargar y enviar.
+			$url = TRUE;
+			$tmp = tempnam("/tmp", "telegram") .substr($file, -4); // .jpg
+			file_put_contents($tmp, fopen($file, 'r'));
+			$file = $tmp;
+		}
+
 		$this->method = "send" .ucfirst($type);
 		if(file_exists(realpath($file))){
 			$this->content[$type] = new CURLFile(realpath($file));
@@ -117,6 +127,7 @@ class __Module_Telegram_Sender extends CI_Model{
 		curl_setopt($ch, CURLOPT_POSTFIELDS, $this->content);
 		$output = curl_exec($ch);
 
+		if($url === TRUE){ unlink($file); }
 		if($keep === FALSE){ $this->_reset(); }
 		return $output;
 		// return $this;
@@ -130,7 +141,7 @@ class __Module_Telegram_Sender extends CI_Model{
 	}
 
 	function dump(){
-		echo $this->method; var_dump($this->content);
+		var_dump($this->method); var_dump($this->content);
 		return $this;
 	}
 
@@ -449,13 +460,10 @@ class Telegram extends CI_Model{
 	}
 
 	// DEPRECATED
-	function receive($a, $b = NULL, $c = NULL){
-		return $this->text_contains($a, $b, $c);
-	}
+	function receive($a, $b = NULL){ return $this->text_contains($a, $b); }
 
-	function text_contains($input, $next_word = NULL, $strpos = NULL){
+	function text_contains($input, $strpos = NULL){
 		if(!is_array($input)){ $input = array($input); }
-		// TODO implementar $next_word
 		foreach($input as $i){
 			if(
 				($strpos === NULL and strpos(strtolower($this->text()), strtolower($i)) !== FALSE) or // Buscar cualquier coincidencia
@@ -558,6 +566,7 @@ class Telegram extends CI_Model{
 
 	function is_bot($user = NULL){
 		if($user === NULL){ $user = $this->user->username; }
+		elseif($user === TRUE && $this->has_reply){ $user = $this->reply_user->username; }
 		return (!empty($user) && substr(strtolower($user), -3) == "bot");
 	}
 
@@ -572,7 +581,18 @@ class Telegram extends CI_Model{
 		return ($full == TRUE ? $admins : $ret);
 	}
 
+	function data($type, $object = TRUE){
+		$accept = ["text", "audio", "document", "photo", "voice", "location", "contact"];
+		$type = strtolower($type);
+		if(in_array($type, $accept) && isset($this->data['message'][$type])){
+			if($object){ return (object) $this->data['message'][$type]; }
+			return $this->data['message'][$type];
+		}
+		return FALSE;
+	}
+
 	function document(){}
+
 	function photo($retall = FALSE, $id = -1){
 		$photos = $this->data['message']['photo'];
 		if(empty($photos)){ return FALSE; }
@@ -588,25 +608,33 @@ class Telegram extends CI_Model{
 		$loc = $this->data['message']['location'];
 		if(empty($loc)){ return FALSE; }
 		if($object == TRUE){ return (object) $loc; }
+		elseif($object === 0){ return array_values($loc); }
 		return $loc;
 	}
 
-	function contact($same = FALSE, $object = TRUE){
+	function contact($self = FALSE, $object = TRUE){
 		$contact = $this->data['message']['contact'];
 		if(empty($contact)){ return FALSE; }
 		if(
-			$same == FALSE or
-			($same == TRUE && $this->user->id == $contact['user_id'])
+			$self == FALSE or
+			($self == TRUE && $this->user->id == $contact['user_id'])
 		){
 			if($object == TRUE){ return (object) $contact; }
 			return $contact;
-		}elseif($same == TRUE){
+		}elseif($self == TRUE){
 			return FALSE;
 		}
 	}
 
-	function download($file){
+	function sticker($object = FALSE){
+		if(!isset($this->data['message']['sticker'])){ return FALSE; }
+		if($object === TRUE){ return (object) $this->data['message']['sticker']; }
+		return $this->data['message']['sticker']['file_id'];
+	}
+
+	function download($file_id){
 		// TODO
+		//
 	}
 
 	function emoji($text, $reverse = FALSE){
@@ -627,6 +655,8 @@ class Telegram extends CI_Model{
 			'antenna' => "\ud83d\udce1",
 			'spam' => "\ud83d\udce8",
 			'laptop' => "\ud83d\udcbb",
+			'pin' => "\ud83d\udccd",
+			'home' => "\ud83c\udfda",
 
 			'forbid' => "\u26d4\ufe0f",
 			'times' => "\u274c",
@@ -694,6 +724,8 @@ class Telegram extends CI_Model{
 			'antenna' => [':antenna:'],
 			'laptop' => [':laptop:'],
 			'spam' => [':spam:'],
+			'pin' => [':pin:'],
+			'home' => [':home:'],
 			'green-check' => [':ok:', ':green-check:'],
 			'warning' => [':warning:'],
 			'exclamation-red' => [':exclamation-red:'],
@@ -725,9 +757,11 @@ class Telegram extends CI_Model{
 			}
 			return json_decode('"' . $text .'"', TRUE);
 		}
+		$text = json_encode($text); // HACK decode UTF -> ASCII para buscar y reemplazar
 		foreach($emoji as $n => $u){
 			$text = str_replace($u, $search[$n][0], $text);
 		}
+		$text = json_decode($text);
 		return substr(json_encode($text), 1, -1); // No comas
 	}
 }

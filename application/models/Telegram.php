@@ -167,6 +167,11 @@ class __Module_Telegram_Sender extends CI_Model{
 		// TODO
 	}
 
+	function force_reply($selective = TRUE){
+		$this->content['reply_markup'] = ['force_reply' => TRUE, 'selective' => $selective];
+		return $this;
+	}
+
 	function caption($text){
 		$this->content['caption'] = $text;
 		return $this;
@@ -212,34 +217,13 @@ class __Module_Telegram_Sender extends CI_Model{
 		return  $this->unban($user, $chat, $keep);
 	}
 
-	function ban($user = NULL, $chat = NULL, $keep = FALSE){
-		return $this->_parse_generic_chatFunctions("kickChatMember", $keep, $chat, $user);
-	}
-
-	function unban($user = NULL, $chat = NULL, $keep = FALSE){
-		return $this->_parse_generic_chatFunctions("unbanChatMember", $keep, $chat, $user);
-	}
-
-	function leave_chat($chat = NULL, $keep = FALSE){
-		return $this->_parse_generic_chatFunctions("leaveChat", $keep, $chat);
-	}
-
-	function get_chat($chat = NULL, $keep = FALSE){
-		return $this->_parse_generic_chatFunctions("getChat", $keep, $chat);
-	}
-
-	function get_admins($chat = NULL, $keep = FALSE){
-		return $this->_parse_generic_chatFunctions("getChatAdministrators", $keep, $chat);
-	}
-
-	function get_member_info($user = NULL, $chat = NULL, $keep = FALSE){
-		// stats -> member, left, kicked, administrator, creator
-		return $this->_parse_generic_chatFunctions("getChatMember", $keep, $chat, $user);
-	}
-
-	function get_members_count($chat = NULL, $keep = FALSE){
-		return $this->_parse_generic_chatFunctions("getChatMembersCount", $keep, $chat);
-	}
+	function ban($user = NULL, $chat = NULL, $keep = FALSE){ return $this->_parse_generic_chatFunctions("kickChatMember", $keep, $chat, $user); }
+	function unban($user = NULL, $chat = NULL, $keep = FALSE){ return $this->_parse_generic_chatFunctions("unbanChatMember", $keep, $chat, $user); }
+	function leave_chat($chat = NULL, $keep = FALSE){ return $this->_parse_generic_chatFunctions("leaveChat", $keep, $chat); }
+	function get_chat($chat = NULL, $keep = FALSE){ return $this->_parse_generic_chatFunctions("getChat", $keep, $chat); }
+	function get_admins($chat = NULL, $keep = FALSE){ return $this->_parse_generic_chatFunctions("getChatAdministrators", $keep, $chat); }
+	function get_member_info($user = NULL, $chat = NULL, $keep = FALSE){ return $this->_parse_generic_chatFunctions("getChatMember", $keep, $chat, $user); }
+	function get_members_count($chat = NULL, $keep = FALSE){ return $this->_parse_generic_chatFunctions("getChatMembersCount", $keep, $chat); }
 
 	function edit($type){
 		if(!in_array($type, ['text', 'message', 'caption'])){ return FALSE; }
@@ -511,6 +495,93 @@ class Telegram extends CI_Model{
 		$text = strtolower($this->text());
 		$text = str_replace(["á", "é", "í", "ó", "ú"], ["a", "e", "i", "o", "u"], $text); // HACK
 		return preg_match("/" .$regex ."/", $text);
+	}
+
+	function text_mention($user = NULL){
+		// Incluye users registrados y anónimos.
+		// NULL -> decir si hay usuarios mencionados o no (T/F)
+		// TRUE -> array [ID => @nombre o nombre]
+		// NUM -> decir si el NUM ID usuario está mencionado o no, y si es @nombre, parsear para validar NUM ID.
+		// STR -> decir si nombre o @nombre está mencionado o no.
+		if(!isset($this->data['message']['entities'])){ return FALSE; }
+		$users = array();
+		$text = $this->text(FALSE); // No UTF-8 clean
+		foreach($this->data['message']['entities'] as $e){
+			if($e['type'] == 'text_mention'){
+				$users[] = [$e['user']['id'] => substr($text, $e['offset'], $e['length'])];
+			}elseif($e['type'] == 'mention'){
+				$u = trim(substr($text, $e['offset'], $e['length'])); // @username
+				// $d = $this->send->get_member_info($u); HACK
+				$d = FALSE;
+				$users[] = ($d === FALSE ? $u : [$d['user']['id'] => $u] );
+			}
+		}
+		if($user == NULL){ return (count($users) > 0 ? $users[0] : FALSE); }
+		if($user === TRUE){ return $users; }
+		if(is_numeric($user)){
+			if($user < count($users)){
+				$k = array_keys($users);
+				$v = array_values($users);
+				return [ $k[$user] => $v[$user] ];
+			}
+			return in_array($user, array_keys($users));
+		}
+		if(is_string($user)){ return in_array($user, array_values($users)); }
+		return FALSE;
+	}
+
+	function text_email($email = NULL){
+		// NULL -> saca el primer mail o FALSE.
+		// TRUE -> array [emails]
+		// STR -> email definido.
+		if(!isset($this->data['message']['entities'])){ return FALSE; }
+		$emails = array();
+		$text = $this->text(FALSE); // No UTF-8 clean
+		foreach($this->data['message']['entities'] as $e){
+			if($e['type'] == 'email'){ $emails[] = strtolower(substr($text, $e['offset'], $e['length'])); }
+		}
+		if($email == NULL){ return (count($emails) > 0 ? $emails[0] : FALSE); }
+		if($email === TRUE){ return $emails; }
+		if(is_string($email)){ return in_array(strtolower($email), $emails); }
+		return FALSE;
+	}
+
+	function text_command($cmd = NULL){
+		// NULL -> saca el primer comando o FALSE.
+		// TRUE -> array [comandos]
+		// STR -> comando definido.
+		if(!isset($this->data['message']['entities'])){ return FALSE; }
+		$cmds = array();
+		$text = $this->text(FALSE); // No UTF-8 clean
+		foreach($this->data['message']['entities'] as $e){
+			if($e['type'] == 'bot_command'){ $cmds[] = strtolower(substr($text, $e['offset'], $e['length'])); }
+		}
+		if($cmd == NULL){ return (count($cmds) > 0 ? $cmds[0] : FALSE); }
+		if($cmd === TRUE){ return $cmds; }
+		if(is_string($cmd)){
+			if($cmd[0] != "/"){ $cmd = "/" .$cmd; }
+			return in_array(strtolower($cmd), $cmds);
+		}
+		return FALSE;
+	}
+
+	function text_hashtag($hg = NULL){
+		// NULL -> saca el primer hashtag o FALSE.
+		// TRUE -> array [hashtags]
+		// STR -> hashtag definido.
+		if(!isset($this->data['message']['entities'])){ return FALSE; }
+		$hgs = array();
+		$text = $this->text(FALSE); // No UTF-8 clean
+		foreach($this->data['message']['entities'] as $e){
+			if($e['type'] == 'hashtag'){ $hgs[] = strtolower(substr($text, $e['offset'], $e['length'])); }
+		}
+		if($hg == NULL){ return (count($hgs) > 0 ? $hgs[0] : FALSE); }
+		if($hg === TRUE){ return $hgs; }
+		if(is_string($hg)){
+			if($hg[0] != "#"){ $hg = "#" .$hg; }
+			return in_array(strtolower($hg), $hgs);
+		}
+		return FALSE;
 	}
 
 	function last_word($clean = FALSE){

@@ -92,6 +92,7 @@ class __Module_Telegram_Sender extends CI_Model{
 
 	function message($id = NULL){
 		if(empty($id)){ return $this->content['message_id']; }
+		if($id === TRUE){ $id = $this->telegram->message; }
 		$this->content['message_id'] = $id;
 		return $this;
 	}
@@ -114,7 +115,11 @@ class __Module_Telegram_Sender extends CI_Model{
 		}else{
 			$this->content[$type] = $file;
 		}
-		if($caption !== NULL){ $this->content['caption'] = $caption; }
+		if($caption !== NULL){
+			$key = "caption";
+			if($type == "audio"){ $key = "title"; }
+			$this->content[$key] = $caption;
+		}
 
 		if(empty($this->content['chat_id'])){ $this->content['chat_id'] = $this->telegram->chat->id; }
 
@@ -133,7 +138,8 @@ class __Module_Telegram_Sender extends CI_Model{
 		// return $this;
 	}
 
-	function location($lat, $lon){
+	function location($lat, $lon = NULL){
+		if(is_array($lat) && $lon == NULL){ $lon = $lat[1]; $lat = $lat[0]; }
 		$this->content['latitude'] = $lat;
 		$this->content['longitude'] = $lon;
 		$this->method = "sendLocation";
@@ -190,16 +196,19 @@ class __Module_Telegram_Sender extends CI_Model{
 
 	function reply_to($message_id = NULL){
 		if($message_id === TRUE or ($message_id === FALSE && !$this->telegram->has_reply)){ $message_id = $this->telegram->message; }
-		elseif($message_id === FALSE && $this->telegram->has_reply){ $message_id = $this->telegram->reply->message_id; }
+		elseif($message_id === FALSE){
+			if(!$this->telegram->has_reply){ return; }
+			$message_id = $this->telegram->reply->message_id;
+		}
 		$this->content['reply_to_message_id'] = $message_id;
 		return $this;
 	}
 
 	function forward_to($chat_id_to){
-		if(empty($this->content['chat_id']) or empty($this->content['message_id'])){ return FALSE; }
+		if(empty($this->content['chat_id']) or empty($this->content['message_id'])){ return $this; }
 		$this->content['from_chat_id'] = $this->content['chat_id'];
 		$this->content['chat_id'] = $chat_id_to;
-		$this->method = "fordwardMessage";
+		$this->method = "forwardMessage";
 
 		return $this;
 	}
@@ -410,6 +419,9 @@ class Telegram extends CI_Model{
 			$this->reply_user = (object) $this->data['message']['reply_to_message']['from'];
 			$this->reply = (object) $this->data['message']['reply_to_message'];
 		}
+		if(isset($this->data['message']['forward_from_chat'])){
+			$this->has_forward = TRUE;
+		}
 		if(isset($this->data['message']['new_chat_participant'])){
 			$this->new_user = (object) $this->data['message']['new_chat_participant'];
 		}elseif(isset($this->data['message']['left_chat_participant'])){
@@ -427,6 +439,7 @@ class Telegram extends CI_Model{
 	public $new_user = NULL;
 	public $reply_user = NULL;
 	public $has_reply = FALSE;
+	public $has_forward = FALSE;
 	public $reply_is_forward = FALSE;
 	public $caption = NULL;
 	public $send; // Class
@@ -593,6 +606,8 @@ class Telegram extends CI_Model{
 	function words($position = NULL, $amount = 1, $filter = FALSE){ // Contar + recibir argumentos
 		if($position === NULL){
 			return count(explode(" ", $this->text()));
+		}elseif($position === TRUE){
+			return explode(" ", $this->text());
 		}elseif(is_numeric($position)){
 			if($amount === TRUE){ $filter = 'alphanumeric'; $amount = 1; }
 			elseif(is_string($amount)){ $filter = $amount; $amount = 1; }
@@ -623,7 +638,7 @@ class Telegram extends CI_Model{
 		return preg_replace($pats[$pattern], "", $text);
 	}
 
-	function is_chat_group(){ return in_array($this->chat->type, ["group", "supergroup"]); }
+	function is_chat_group(){ return isset($this->chat->type) && in_array($this->chat->type, ["group", "supergroup"]); }
 	function data_received($expect = NULL){
 		$data = ["new_chat_participant", "left_chat_participant", "new_chat_member", "left_chat_member", "reply_to_message",
 			"text", "audio", "document", "photo", "voice", "location", "contact"];
@@ -635,10 +650,37 @@ class Telegram extends CI_Model{
 		return FALSE;
 	}
 
+	function forward_type($expect = NULL){
+		if(!$this->has_forward){ return FALSE; }
+		$type = $this->data['message']['forward_from_chat']['type'];
+		if($expect !== NULL){ return (strtolower($expect) == $type); }
+		return $type;
+	}
+
 	function is_bot($user = NULL){
 		if($user === NULL){ $user = $this->user->username; }
 		elseif($user === TRUE && $this->has_reply){ $user = $this->reply_user->username; }
 		return (!empty($user) && substr(strtolower($user), -3) == "bot");
+	}
+
+	// NOTE: Solo funcionará si el bot está en el grupo.
+	function user_in_chat($user, $chat = NULL, $object = FALSE){
+		if($chat === TRUE){ $object = TRUE; $chat = NULL; }
+		if(empty($chat)){ $chat = $this->chat->id; }
+		$info = $this->send->get_member_info($user, $chat);
+		$ret = ($object ? (object) $info : $info);
+		return ( ($info === FALSE or in_array($info['status'], ['left', 'kicked'])) ? FALSE : $ret );
+	}
+
+	function grouplink($text, $url = FALSE){
+		$link = "https://telegram.me/";
+		if($text[0] != "@" and strlen($text) == 22){
+			$link .= "joinchat/$text";
+		}else{
+			if($url && $text[0] == "@"){ $link .= substr($text, 1); }
+			else{ $link = $text; }
+		}
+		return $link;
 	}
 
 	function dump($json = FALSE){ return($json ? json_encode($this->data) : $this->data); }
@@ -676,10 +718,12 @@ class Telegram extends CI_Model{
 	}
 
 	function location($object = TRUE){
+		if(!isset($this->data['message']['location'])){ return FALSE; }
 		$loc = $this->data['message']['location'];
 		if(empty($loc)){ return FALSE; }
 		if($object == TRUE){ return (object) $loc; }
-		elseif($object === 0){ return array_values($loc); }
+		elseif($object == FALSE){ return array_values($loc); }
+		// null u otro
 		return $loc;
 	}
 
@@ -728,6 +772,9 @@ class Telegram extends CI_Model{
 			'laptop' => "\ud83d\udcbb",
 			'pin' => "\ud83d\udccd",
 			'home' => "\ud83c\udfda",
+			'map' => "\ud83d\uddfa",
+			'candy' => "\ud83c\udf6c",
+			'spiral' => "\ud83c\udf00",
 
 			'forbid' => "\u26d4\ufe0f",
 			'times' => "\u274c",
@@ -797,6 +844,9 @@ class Telegram extends CI_Model{
 			'spam' => [':spam:'],
 			'pin' => [':pin:'],
 			'home' => [':home:'],
+			'map' => [':map:'],
+			'candy' => [':candy:'],
+			'spiral' => [':spiral:'],
 			'green-check' => [':ok:', ':green-check:'],
 			'warning' => [':warning:'],
 			'exclamation-red' => [':exclamation-red:'],

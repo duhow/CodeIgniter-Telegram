@@ -163,6 +163,12 @@ class __Module_Telegram_Sender extends CI_Model{
 		return $this;
 	}
 
+	function get_file($id){
+		$this->method = "getFile";
+		$this->content['file_id'] = $id;
+		return $this->send();
+	}
+
 	function file($type, $file, $caption = NULL, $keep = FALSE){
 		if(!in_array($type, ["photo", "audio", "voice", "document", "sticker", "video"])){ return FALSE; }
 
@@ -496,6 +502,9 @@ class Telegram extends CI_Model{
 		parent::__construct();
 		$this->send = new __Module_Telegram_Sender();
 
+		$this->user = (object) ['id' => NULL, 'username' => NULL];
+		$this->chat = (object) ['id' => NULL, 'username' => NULL];
+
 		$content = file_get_contents("php://input");
 		// if(empty($content)){ die(); }
 		$this->raw = $content;
@@ -608,6 +617,8 @@ class Telegram extends CI_Model{
 		$input = implode("|", $input);
 		$input = strtolower($input); // HACK util o molesto en segun que casos?
 		$input = str_replace(["á", "é", "í", "ó", "ú"], ["a", "e", "i", "o", "u"], $input); // HACK mas de lo mismo, ayuda o molesta?
+		$input = str_replace(["Á", "É", "Í", "Ó", "Ú"], ["A", "E", "I", "O", "U"], $input); // HACK
+		$input = strtolower($input);
         $input = str_replace("/", "\/", $input); // CHANGED fix para escapar comandos y demás.
 
 		if(is_bool($next_word)){ $position = $next_word; $next_word = NULL; }
@@ -616,7 +627,9 @@ class Telegram extends CI_Model{
 			$next_word = implode("|", $next_word);
 			$next_word = strtolower($next_word); // HACK
 			$next_word = str_replace(["á", "é", "í", "ó", "ú"], ["a", "e", "i", "o", "u"], $next_word); // HACK
-            $input = str_replace("/", "\/", $input); // CHANGED
+			$next_word = str_replace(["Á", "É", "Í", "Ó", "Ú"], ["A", "E", "I", "O", "U"], $next_word); // HACK
+			$next_word = strtolower($next_word); // HACK
+            $next_word = str_replace("/", "\/", $next_word); // CHANGED
 		}
 
 		if($position === TRUE){
@@ -632,6 +645,8 @@ class Telegram extends CI_Model{
 
 		$text = strtolower($this->text());
 		$text = str_replace(["á", "é", "í", "ó", "ú"], ["a", "e", "i", "o", "u"], $text); // HACK
+		$text = str_replace(["Á", "É", "Í", "Ó", "Ú"], ["A", "E", "I", "O", "U"], $text); // HACK
+		$text = strtolower($text);
 		return preg_match("/" .$regex ."/", $text);
 	}
 
@@ -701,7 +716,7 @@ class Telegram extends CI_Model{
 		if($cmd === TRUE){ return $cmds; }
 		if(is_string($cmd)){
 			if($cmd[0] != "/"){ $cmd = "/" .$cmd; }
-			if(in_array(strtolower($cmd), $cmds)){ return TRUE; }
+			if(in_array(strtolower($cmd), $cmds) && strpos($cmd, "@") === FALSE){ return TRUE; }
 			$name = $this->config->item('telegram_bot_name');
 			if($name){
 				if($name[0] != "@"){ $name = "@" .$name; }
@@ -738,7 +753,7 @@ class Telegram extends CI_Model{
 		$cmds = array();
 		$text = $this->text(FALSE); // No UTF-8 clean
 		foreach($this->data['message']['entities'] as $e){
-			if($e['type'] == 'url'){ $cmds[] = strtolower(substr($text, $e['offset'], $e['length'])); }
+			if($e['type'] == 'url'){ $cmds[] = substr($text, $e['offset'], $e['length']); }
 		}
 		if($cmd == NULL){ return (count($cmds) > 0 ? $cmds[0] : FALSE); }
 		if($cmd === TRUE){ return $cmds; }
@@ -874,7 +889,7 @@ class Telegram extends CI_Model{
 	function location($object = TRUE){ return $this->_generic_content('location', $object); }
 	function voice($object = NULL){ return $this->_generic_content('voice', $object); }
  	function video($object = NULL){ return $this->_generic_content('video', $object); }
-	function sticker($object = FALSE){ return $this->_generic_content('sticker', $object); }
+	function sticker($object = NULL){ return $this->_generic_content('sticker', $object); }
 
 	function gif(){
 		$gif = $this->document(TRUE);
@@ -925,8 +940,10 @@ class Telegram extends CI_Model{
 	}
 
 	function download($file_id){
-		// TODO
-		//
+		$data = $this->send->get_file($file_id);
+		$url = "https://api.telegram.org/file/bot" .$this->config->item('telegram_bot_id') .":" .$this->config->item('telegram_bot_key') ."/";
+		$file = $url .$data['file_path'];
+		return $file;
 	}
 
 	function emoji($text, $reverse = FALSE){
@@ -953,6 +970,9 @@ class Telegram extends CI_Model{
 			'candy' => "\ud83c\udf6c",
 			'spiral' => "\ud83c\udf00",
 			'tennis' => "\ud83c\udfbe",
+			'key' => "\ud83d\udddd",
+			'door' => "\ud83d\udeaa",
+			'frog' => "\ud83d\udc38",
 
 			'forbid' => "\u26d4\ufe0f",
 			'times' => "\u274c",
@@ -1005,6 +1025,7 @@ class Telegram extends CI_Model{
 			'die' => [":die:", ">X"],
 			'cloud' => [":cloud:"],
 			'gun' => [":gun:"],
+			'door' => [":door:"],
 
 			'forbid' => [':forbid:'],
 			'times' => [':times:'],
@@ -1026,6 +1047,8 @@ class Telegram extends CI_Model{
 			'candy' => [':candy:'],
 			'spiral' => [':spiral:'],
 			'tennis' => [":tennis:"],
+			'key' => [":key:"],
+			'frog' => [":frog:"],
 			'green-check' => [':ok:', ':green-check:'],
 			'warning' => [':warning:'],
 			'exclamation-red' => [':exclamation-red:'],

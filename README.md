@@ -1,3 +1,6 @@
+# DEPRECATED - See [Telegram-PHP](https://github.com/duhow/Telegram-PHP).
+All future updates will be available in [Telegram-PHP](https://github.com/duhow/Telegram-PHP).
+
 # CodeIgniter-Telegram
 
 - Configure *config/telegram.php* with Telegram API data.
